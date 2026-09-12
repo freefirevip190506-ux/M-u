@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shader Material Color Editor</title>
+<style>
+  :root{
+    --bg:#101317;
+    --panel:#1a1e24;
+    --panel2:#20252c;
+    --line:#2b313b;
+    --text:#e7e9ed;
+    --muted:#8b93a1;
+    --accent:#ff8a3d;
+    --accent2:#3ddc97;
+    --danger:#ff6b6b;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    line-height:1.5;
+  }
+  header{
+    padding:28px 24px 16px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{
+    margin:0 0 6px;
+    font-size:20px;
+    font-weight:600;
+    letter-spacing:.2px;
+  }
+  header p{
+    margin:0;
+    color:var(--muted);
+    font-size:13.5px;
+    max-width:640px;
+  }
+  main{
+    max-width:900px;
+    margin:0 auto;
+    padding:24px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:18px 20px;
+    transition:opacity .15s ease;
+  }
+  .card.disabled{
+    opacity:.5;
+  }
+  .card h2{
+    margin:0 0 4px;
+    font-size:15px;
+    font-weight:600;
+  }
+  .card .sub{
+    margin:0 0 14px;
+    color:var(--muted);
+    font-size:12.5px;
+  }
+  .card .sub code{
+    font-family:var(--mono);
+    background:var(--panel2);
+    padding:1px 5px;
+    border-radius:4px;
+  }
+  .notice{
+    margin:10px 0 0;
+    font-size:12px;
+    color:var(--danger);
+  }
+  .prop-row{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .swatch{
+    width:52px;
+    height:52px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    flex:none;
+    background-image:
+      linear-gradient(45deg,#333 25%,transparent 25%),
+      linear-gradient(-45deg,#333 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#333 75%),
+      linear-gradient(-45deg,transparent 75%,#333 75%);
+    background-size:12px 12px;
+    background-position:0 0,0 6px,6px -6px,-6px 0px;
+    position:relative;
+    overflow:hidden;
+  }
+  .swatch .fill{
+    position:absolute;
+    inset:0;
+  }
+  .controls{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    flex:1;
+    min-width:220px;
+  }
+  .field{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  .field label{
+    width:44px;
+    flex:none;
+  }
+  input[type="color"]{
+    -webkit-appearance:none;
+    width:38px;
+    height:28px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:0;
+    background:none;
+    cursor:pointer;
+    flex:none;
+  }
+  input[type="range"]{
+    flex:1;
+    accent-color:var(--accent);
+  }
+  .val{
+    width:38px;
+    text-align:right;
+    font-family:var(--mono);
+    color:var(--text);
+    font-size:12px;
+    flex:none;
+  }
+  .hexcode{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--text);
+    background:var(--panel2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:4px 8px;
+    width:110px;
+    text-align:center;
+  }
+  .hexcode:focus{
+    outline:2px solid var(--accent);
+    outline-offset:1px;
+  }
+  .actions{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  button{
+    font:inherit;
+    font-size:14px;
+    font-weight:600;
+    padding:11px 20px;
+    border-radius:8px;
+    border:none;
+    cursor:pointer;
+    background:var(--accent);
+    color:#1a1206;
+    transition:filter .15s ease, transform .05s ease;
+  }
+  button:hover{ filter:brightness(1.08); }
+  button:active{ transform:translateY(1px); }
+  button.secondary{
+    background:transparent;
+    color:var(--text);
+    border:1px solid var(--line);
+  }
+  button:focus-visible, .filebtn:focus-within, input:focus-visible{
+    outline:2px solid var(--accent);
+    outline-offset:2px;
+  }
+  #status{
+    font-size:12.5px;
+    color:var(--accent2);
+    min-height:16px;
+  }
+  #status.err{ color:var(--danger); }
+  textarea{
+    width:100%;
+    height:140px;
+    background:var(--panel2);
+    color:var(--muted);
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-family:var(--mono);
+    font-size:11px;
+    padding:10px;
+    resize:vertical;
+    word-break:break-all;
+  }
+  details summary{
+    cursor:pointer;
+    color:var(--muted);
+    font-size:12.5px;
+    margin-bottom:8px;
+  }
+  .source-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .source-label{
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  .source-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .filebtn{
+    font-size:13px;
+    font-weight:600;
+    padding:9px 16px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    color:var(--text);
+    cursor:pointer;
+    display:inline-block;
+  }
+  .filebtn:hover{ border-color:var(--accent); }
+  .diff-list{
+    list-style:none;
+    margin:0;
+    padding:0;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    font-size:13px;
+  }
+  .diff-list li{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .diff-list li.muted{
+    color:var(--muted);
+  }
+  .dot{
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    flex:none;
+    border:1px solid var(--line);
+  }
+  footer{
+    text-align:center;
+    color:var(--muted);
+    font-size:11.5px;
+    padding:20px;
+  }
+  @media (max-width:480px){
+    header{ padding:20px 16px 14px; }
+    main{ padding:16px; }
+    .card{ padding:14px 16px; }
+    .field{ flex-wrap:wrap; }
+    .field label{ width:auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Shader Material Color Editor</h1>
+  <p>Chỉnh màu <strong>X-Ray Color</strong>, <strong>Outline Color</strong> và <strong>độ dày viền (Outline Width)</strong> trong dữ liệu material nhị phân (hex dump), xem trước thay đổi, rồi xuất file .txt với hex code mới — mọi byte khác giữ nguyên.</p>
+</header>
+
+<main>
+
+  <section class="card" id="card-source">
+    <h2>Dữ liệu gốc</h2>
+    <p class="sub">Công cụ dùng dữ liệu material nạp sẵn theo mặc định. Nếu cần chỉnh một material khác, nạp file .txt chứa hex dump của material đó.</p>
+    <div class="source-row">
+      <span id="source-label" class="source-label"></span>
+      <div class="source-actions">
+        <label class="filebtn" for="file-input">Nạp file hex khác</label>
+        <input type="file" id="file-input" accept=".txt" hidden>
+        <button class="secondary" id="btn-use-default" type="button">Dùng lại mặc định</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="props-grid" style="display:flex;flex-direction:column;gap:16px;"></div>
+
+  <section class="card" id="card-diff">
+    <h2>Thay đổi so với gốc</h2>
+    <p class="sub">Chỉ các byte thuộc 3 thuộc tính ở trên bị thay đổi khi xuất file — phần shader bytecode và mọi thuộc tính khác được giữ nguyên 100%.</p>
+    <ul id="diff-list" class="diff-list"></ul>
+  </section>
+
+  <section class="card">
+    <div class="actions">
+      <button id="btn-export" type="button">Xuất file .txt đã chỉnh</button>
+      <button class="secondary" id="btn-copy" type="button">Sao chép hex</button>
+      <button class="secondary" id="btn-reset" type="button">Đặt lại giá trị gốc</button>
+      <span id="status" role="status" aria-live="polite"></span>
+    </div>
+    <details style="margin-top:14px;">
+      <summary>Xem hex code sau khi chỉnh (tùy chọn)</summary>
+      <textarea id="preview" readonly></textarea>
+    </details>
+  </section>
+
+</main>
+
+<footer>Chỉ các byte của 2 màu RGBA và giá trị độ dày viền được thay đổi trong toàn bộ file — phần shader bytecode và mọi thuộc tính khác được giữ nguyên 100%.</footer>
+
+<script>
+const ORIGINAL_HEX = "00 00 00 00 04 00 00 00 08 00 00 00 5F 4D 61 69 6E 54 65 78 07 00 00 00 54 65 78 74 75 72 65 00 00 00 00 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 3F 05 00 00 00 77 68 69 74 65 00 00 00 02 00 00 00 0A 00 00 00 5F 58 52 61 79 43 6F 6C 6F 72 00 00 0B 00 00 00 58 2D 52 61 79 20 43 6F 6C 6F 72 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 3F 00 00 00 00 01 00 00 00 0D 00 00 00 5F 4F 75 74 4C 69 6E 65 57 69 64 74 68 00 00 00 0D 00 00 00 4F 75 74 6C 69 6E 65 20 57 69 64 74 68 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 00 00 E0 40 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 0D 00 00 00 5F 4F 75 74 4C 69 6E 65 43 6F 6C 6F 72 00 00 00 0D 00 00 00 4F 75 74 6C 69 6E 65 20 43 6F 6C 6F 72 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 80 3F 00 00 00 00 01 00 00 00 01 00 00 00 02 00 00 00 01 00 00 00 FE A9 F6 AA F8 32 1A 85 27 2E 62 48 1B 4D 72 47 01 00 00 00 0E 00 00 00 0A 00 00 00 08 00 00 00 46 47 6C 6F 62 61 6C 73 08 00 00 00 08 00 00 00 56 47 6C 6F 62 61 6C 73 00 00 00 00 0D 00 00 00 5F 4F 75 74 4C 69 6E 65 43 6F 6C 6F 72 00 00 00 09 00 00 00 0D 00 00 00 5F 4F 75 74 4C 69 6E 65 57 69 64 74 68 00 00 00 02 00 00 00 14 00 00 00 5F 57 6F 72 6C 64 53 70 61 63 65 43 61 6D 65 72 61 50 6F 73 01 00 00 00 19 00 00 00 67 6C 73 74 61 74 65 5F 6D 61 74 72 69 78 5F 70 72 6F 6A 65 63 74 69 6F 6E 00 00 00 05 00 00 00 10 00 00 00 75 6E 69 74 79 5F 4D 61 74 72 69 78 49 6E 76 56 07 00 00 00 0D 00 00 00 75 6E 69 74 79 5F 4D 61 74 72 69 78 56 00 00 00 06 00 00 00 13 00 00 00 75 6E 69 74 79 5F 4F 62 6A 65 63 74 54 6F 57 6F 72 6C 64 00 03 00 00 00 13 00 00 00 75 6E 69 74 79 5F 57 6F 72 6C 64 54 6F 4F 62 6A 65 63 74 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 A0 40 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 20 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 A0 40 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 20 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 40 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 7F 43 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 7F 43 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 0E 00 00 00 75 6E 69 74 79 5F 46 6F 67 53 74 61 72 74 00 00 00 00 00 00 0C 00 00 00 75 6E 69 74 79 5F 46 6F 67 45 6E 64 00 00 00 00 10 00 00 00 75 6E 69 74 79 5F 46 6F 67 44 65 6E 73 69 74 79 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 0E 00 00 00 75 6E 69 74 79 5F 46 6F 67 43 6F 6C 6F 72 00 00 FF FF FF FF E5 6E 00 00 01 00 00 00 05 00 00 00 51 55 45 55 45 00 00 00 09 00 00 00 41 6C 70 68 61 54 65 73 74 00 00 00 00 00 00 00 00 00 00 00 06 00 00 00 00 00 00 00 04 00 00 00 02 00 00 00 01 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 02 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 02 00 00 00 01 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 02 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 02 00 00 00 01 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 02 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 00 00 00 00 04 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 05 00 00 00 03 00 00 00 10 00 00 00 00 00 00 00 00 04 00 00 04 00 00 00 50 00 00 00 00 00 00 00 00 04 00 00 05 00 00 00 90 00 00 00 00 00 00 00 00 04 00 00 06 00 00 00 D0 00 00 00 00 00 00 00 00 04 00 00 07 00 00 00 10 01 00 00 00 00 00 00 00 04 00 00 02 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 03 00 00 02 00 00 00 50 01 00 00 00 00 00 00 00 01 00 00 00 00 00 00 54 01 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 05 00 00 00 00 00 01 00 02 00 03 00 04 00 00 00 00 00 00 00 04 00 00 00 02 00 00 00 05 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 06 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 02 00 00 00 05 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 06 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 02 00 00 00 05 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 06 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 00 00 00 00 04 00 00 00 02 00 00 00 03 00 00 00 04 00 00 00 02 00 00 00 03 00 00 00 04 00 00 00 02 00 00 00 03 00 00 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 08 00 00 00 00 00 00 00 01 00 00 00 09 00 00 00 00 00 00 00 00 00 00 00 03 04 00 00 00 00 00 00 08 00 00 00 01 00 00 00 01 00 00 00 08 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 05 00 00 00 00 00 01 00 02 00 03 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 7A BD EE CB 40 95 AB 90 7B FA 96 3C 6E DD DB 9A 01 00 00 00 0E 00 00 00 07 00 00 00 08 00 00 00 46 47 6C 6F 62 61 6C 73 05 00 00 00 08 00 00 00 56 47 6C 6F 62 61 6C 73 00 00 00 00 14 00 00 00 5F 57 6F 72 6C 64 53 70 61 63 65 43 61 6D 65 72 61 50 6F 73 01 00 00 00 0A 00 00 00 5F 58 52 61 79 43 6F 6C 6F 72 00 00 06 00 00 00 0E 00 00 00 75 6E 69 74 79 5F 4D 61 74 72 69 78 56 50 00 00 04 00 00 00 13 00 00 00 75 6E 69 74 79 5F 4F 62 6A 65 63 74 54 6F 57 6F 72 6C 64 00 02 00 00 00 13 00 00 00 75 6E 69 74 79 5F 57 6F 72 6C 64 54 6F 4F 62 6A 65 63 74 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 A0 40 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 20 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 A0 40 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 20 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 70 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 00 00 80 3F 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 40 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 41 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 7F 43 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 7F 43 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 0E 00 00 00 75 6E 69 74 79 5F 46 6F 67 53 74 61 72 74 00 00 00 00 00 00 0C 00 00 00 75 6E 69 74 79 5F 46 6F 67 45 6E 64 00 00 00 00 10 00 00 00 75 6E 69 74 79 5F 46 6F 67 44 65 6E 73 69 74 79 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 00 00 00 00 09 00 00 00 3C 6E 6F 6E 69 6E 69 74 3E 00 00 00 0E 00 00 00 75 6E 69 74 79 5F 46 6F 67 43 6F 6C 6F 72 00 00 FF FF FF FF 4C CB 01 00 01 00 00 00 05 00 00 00 51 55 45 55 45 00 00 00 09 00 00 00 41 6C 70 68 61 54 65 73 74 00 00 00 00 00 00 00 00 00 00 00 06 00 00 00 00 00 00 00 04 00 00 00 02 00 00 00 08 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 09 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 02 00 00 00 08 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 09 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 02 00 00 00 08 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 09 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 17 00 00 00 00 00 00 00 04 00 00 00 02 00 00 00 07 00 00 00 07 00 00 00 02 00 00 00 07 00 00 00 07 00 00 00 02 00 00 00 07 00 00 00 07 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 03 00 00 00 02 00 00 00 10 00 00 00 00 00 00 00 00 04 00 00 03 00 00 00 50 00 00 00 00 00 00 00 00 04 00 00 04 00 00 00 90 00 00 00 00 00 00 00 00 04 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 03 00 00 00 00 00 00 D0 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 05 00 00 00 00 00 01 00 02 00 03 00 04 00 00 00 00 00 00 00 04 00 00 00 02 00 00 00 0A 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 0B 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 02 00 00 00 0A 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 0B 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 02 00 00 00 0A 00 00 00 00 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 0B 00 00 00 01 00 00 00 04 00 00 00 21 00 00 00 00 00 00 00 18 00 00 00 00 00 00 00 04 00 00 00 02 00 00 00 03 00 00 00 04 00 00 00 02 00 00 00 03 00 00 00 04 00 00 00 02 00 00 00 03 00 00 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 05 00 00 00 00 00 00 00 01 00 00 00 06 00 00 00 00 00 00 00 00 00 00 00 03 04 00 00 00 00 00 00 08 00 00 00 01 00 00 00 01 00 00 00 05 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 05 00 00 00 00 00 01 00 02 00 03 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 05 00 00 00 51 55 45 55 45 00 00 00 09 00 00 00 41 6C 70 68 61 54 65 73 74 00 00 00 00 00 00 00 05 00 00 00 14 00 00 00 53 54 45 52 45 4F 5F 49 4E 53 54 41 4E 43 49 4E 47 5F 4F 4E 18 00 00 00 55 4E 49 54 59 5F 53 49 4E 47 4C 45 5F 50 41 53 53 5F 53 54 45 52 45 4F 13 00 00 00 53 54 45 52 45 4F 5F 4D 55 4C 54 49 56 49 45 57 5F 4F 4E 00 18 00 00 00 53 54 45 52 45 4F 5F 43 55 42 45 4D 41 50 5F 52 45 4E 44 45 52 5F 4F 4E 0C 00 00 00 5F 43 4C 49 50 50 49 4E 47 5F 4F 4E 05 00 00 00 00 00 00 00 00 00 00 00 15 00 00 00 42 52 4D 6F 62 69 6C 65 2F 53 70 65 63 69 61 6C 2F 58 52 61 79 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00 0E 00 00 00 01 00 00 00 01 00 00 00 00 00 00 00 01 00 00 00 01 00 00 00 37 08 00 00 01 00 00 00 01 00 00 00 F4 43 00 00 37 08 00 00 A2 0C 00 00 00 94 00 00 00 34 00 01 00 62 C8 00 00 00 40 11 0C 00 53 08 12 00 00 50 0C 00 26 58 23 24 00 53 8C 23 00 00 50 0C 00 62 DC 23 00 00 80 02 0C 00 62 5C 26 00 00 B8 04 0C 00 26 14 2B 30 00 63 48 2B 00 00 CC 08 18 00 43 34 00 00 DC 0C 00 53 F0 3C 00 00 7C 3C 00 53 6C 3F 00 00 88 3C 00 6E BA 75 0A 0C 02 00 01 00 00 37 00 AA 56 47 6C 6F 62 61 6C 73 54 01 1C 00 00 34 00 2F 17 00 01 00 03 FF 02 FE 10 00 00 FE CA 0D F0 30 00 00 00 06 00 00 00 3C 28 00 04 80 25 00 00 00 FF FF FF FF 0C 00 FC 15 78 6C 61 74 4D 74 6C 4D 61 69 6E 00 23 69 6E 63 6C 75 64 65 20 3C 6D 65 74 61 6C 5F 73 74 64 6C 69 62 3E 0A 18 00 F1 0A 74 65 78 74 75 72 65 3E 0A 75 73 69 6E 67 20 6E 61 6D 65 73 70 61 63 65 20 1F 00 94 3B 0A 73 74 72 75 63 74 20 C3 00 F0 0B 5F 54 79 70 65 0A 7B 0A 20 20 20 20 66 6C 6F 61 74 33 20 5F 57 6F 72 6C 64 53 35 00 A6 43 61 6D 65 72 61 50 6F 73 3B 21 00 F1 0E 34 20 68 6C 73 6C 63 63 5F 6D 74 78 34 78 34 75 6E 69 74 79 5F 4F 62 6A 65 63 74 54 6F 3B 00 3F 5B 34 5D 30 00 0D 01 28 00 22 54 6F 37 00 0F 30 00 0A F0 03 67 6C 73 74 61 74 65 5F 6D 61 74 72 69 78 5F 70 72 6F 33 00 3F 69 6F 6E 66 00 10 11 4D 34 00 1F 56 2A 00 16 3B 49 6E 76 2D 00 F4 04 20 5F 4F 75 74 4C 69 6E 65 57 69 64 74 68 3B 0A 7D 3B 0A 42 01 C8 4D 74 6C 5F 56 65 72 74 65 78 49 6E 41 01 F7 10 34 20 50 4F 53 49 54 49 4F 4E 30 20 5B 5B 20 61 74 74 72 69 62 75 74 65 28 30 29 20 5D 5D 20 5D 00 AB 32 20 54 45 58 43 4F 4F 52 44 2A 00 1C 31 2A 00 8B 33 20 4E 4F 52 4D 41 4C 28 00 13 32 28 00 0F 96 00 02 3A 4F 75 74 97 00 80 6D 74 6C 5F 50 6F 73 69 3D 01 00 48 00 13 70 0C 00 EF 2C 20 69 6E 76 61 72 69 61 6E 74 20 5D 5D A0 00 07 55 75 73 65 72 28 12 00 00 7B 00 02 7A 00 11 76 6F 00 0A 7A 00 17 20 BB 02 11 28 52 00 7B 63 6F 6E 73 74 61 6E 7A 02 15 26 0F 00 00 62 00 62 62 75 66 66 65 72 29 01 11 2C 36 00 08 65 01 60 20 69 6E 70 75 74 28 00 EB 73 74 61 67 65 5F 69 6E 20 5D 5D 29 0A 7B 29 00 00 7E 00 69 6F 75 74 70 75 74 F5 01 20 75 5F 93 00 1F 30 14 00 00 1F 31 14 00 00 18 32 04 02 02 13 00 12 36 13 00 03 48 00 65 2E 78 79 7A 20 3D BE 00 1F 2E E4 02 0E 21 31 5D 33 00 1E 2A 33 00 0F 87 02 03 6F 32 5D 2E 79 79 79 74 00 01 4F 66 6D 61 28 78 00 17 11 30 78 00 1F 2C 77 00 18 48 78 78 78 2C 73 00 1F 29 85 00 2F 1F 32 85 00 1E 3F 7A 7A 7A 85 00 3D 1F 33 85 00 1E 3F 77 77 77 85 00 09 00 83 00 47 64 6F 74 28 22 00 12 2C A5 02 13 2E AF 03 0D 35 00 1F 31 38 02 4E 1D 30 38 02 1F 31 38 02 51 19 30 38 02 1E 31 F9 00 0F 38 02 51 19 30 38 02 0F 85 00 00 0F 38 02 51 19 30 38 02 1F 31 BD 02 01 09 38 02 1F 31 38 02 73 1F 31 38 02 63 1F 31 38 02 71 1F 31 38 02 71 1F 31 38 02 0E 1F 79 38 02 1F 1E 36 A3 04 0F 57 05 07 00 2D 00 44 72 73 71 72 2F 00 1D 36 75 05 23 20 3D 1A 08 05 22 00 27 20 2A 1F 00 0F 2F 00 00 07 0D 00 14 2A 3C 00 05 11 01 09 5D 09 0F 72 01 02 02 DE 00 05 51 09 00 A3 02 0E D3 02 0F 8A 0A 08 02 06 03 0F CC 01 21 0A 48 00 04 D6 02 0C 90 00 0F BC 02 32 0A 6B 00 1F 32 6B 00 04 0F A2 02 12 08 0E 00 1F 2B 28 01 18 1D 33 28 01 17 32 4E 00 1E 79 77 01 0F 6B 0B 05 2C 31 5D 45 00 0E FE 00 0F 3A 00 03 27 30 5D DF 00 07 58 01 1A 32 E9 00 0F 52 00 18 17 32 52 00 17 7A 3F 01 0E 52 00 04 0A 00 1F 2B E4 00 12 2F 33 5D 18 03 01 27 6D 61 66 03 14 2C EC 02 52 30 2E 30 30 39 01 00 49 37 38 2C 20 0F 00 18 29 D0 01 1F 29 7D 01 03 1E 30 7D 01 0F 1E 0D 13 0A 89 01 1E 30 37 01 0F 46 00 12 06 95 01 1E 30 95 01 0F 5E 00 2E 0F A1 01 05 1F 30 5E 00 32 17 33 5E 00 18 77 CB 09 0F 3A 03 02 26 28 2D 97 04 0F 01 0F 00 00 26 00 11 78 77 03 0F 58 03 2C 1F 31 FF 07 00 0F D9 03 0B 37 20 3D 20 95 05 33 31 2E 78 21 00 02 E5 0C 18 2E D7 0D 29 2E 7A 8A 02 32 31 2E 78 73 02 22 31 30 01 00 16 35 CE 01 1F 7A 46 00 08 39 78 79 77 BB 05 19 77 2B 00 05 03 0E 02 F9 02 2C 69 6E 15 00 02 2E 00 65 72 65 74 75 72 6E 8B 0D 93 7D 0A 00 00 13 00 00 00 03 E8 10 40 0D 00 00 00 6B 11 40 0E 00 00 00 47 11 1F 0F 40 11 08 00 20 00 00 24 12 CF 5F 43 4C 49 50 50 49 4E 47 5F 4F 4E 50 11 FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 26 0F C4 22 05 13 46 74 01 2E 08 00 C4 22 0F 34 00 19 13 01 1C 00 10 5F 9B 0E 38 54 65 78 34 00 13 04 50 00 1F 18 9C 11 04 2F 57 02 C4 11 73 05 4C 0F C2 75 69 6E 74 33 32 5F 74 20 72 70 5F 69 01 B0 5F 72 65 6D 61 70 5F 6D 61 73 6B 2A 0F 31 66 75 6E 0D 03 14 5F 33 00 02 5C 10 07 43 00 01 09 00 01 49 00 0D 45 00 00 79 03 1F 28 5A 00 02 B5 3E 3E 20 30 29 20 26 20 30 78 46 52 12 1F 46 52 12 00 55 68 61 6C 66 34 44 11 5D 43 6F 6C 6F 72 AE 10 86 46 72 61 67 6D 65 6E 74 B0 10 02 36 00 91 53 56 5F 54 61 72 67 65 74 7D 10 10 63 3C 00 0D 8D 00 07 86 10 13 66 47 00 0C 54 00 0F 8A 10 08 1A 46 8A 10 1F 46 8A 10 04 08 63 10 08 59 00 08 65 10 03 1B 03 07 B4 00 3C 3D 20 46 E7 08 03 00 01 0F 1D 03 04 07 D0 02 1F 18 54 14 14 2F 80 04 90 02 FF 49 0A D6 13 0F 0C 13 0E 1F 20 D9 02 9F 02 63 13 74 73 61 6D 70 6C 65 72 08 00 04 18 05 01 68 13 03 1B 00 08 2F 00 03 0C 02 30 32 64 3C CE 00 A2 2C 20 61 63 63 65 73 73 3A 3A 2C 00 38 20 3E 20 41 00 03 2D 00 03 FB 14 1D 2C 47 03 0F D5 13 01 0F 72 03 14 00 7E 00 04 24 07 23 36 5F D8 13 43 62 6F 6F 6C 15 00 2F 62 30 28 00 01 19 31 5C 07 11 36 53 02 04 B1 00 12 2E C3 00 1B 28 09 01 1F 2C E2 06 00 3B 29 2E 77 49 00 07 46 0A 00 56 00 11 2B 78 00 59 28 2D 30 2E 35 CF 07 28 62 30 28 00 11 31 44 01 00 24 0A 03 25 00 74 69 66 28 28 28 69 6E EC 07 20 62 30 60 0D 00 10 00 33 30 78 66 01 00 F4 02 75 29 29 29 21 3D 30 29 7B 64 69 73 63 61 72 64 5F 20 02 4F 28 29 3B 7D 8C 04 03 03 E2 08 0F 90 04 03 06 A0 08 0E 38 00 00 06 08 0B A2 00 0F B9 04 00 0F 80 2A 17 2F D0 00 80 2A 17 2F 94 08 30 19 FF 24 09 AB 0C 11 50 2B 00 0F B5 18 5B 0F 8D 18 44 1F 33 8D 18 0F 0F A4 00 00 1D 31 2C 00 1F 31 B9 18 C3 0F A5 18 02 0F 41 11 01 0F 42 11 1F 0E 8C 0D 0F 3A 11 1B 0F 36 11 02 1E 78 EC 0D 0F 60 00 23 2E 32 5D 2B 11 0F 4C 0E 0B 04 0A 00 0F C8 0D 1B 0F 33 10 03 1F 30 1C 11 18 1B 50 4C 01 0F CB 10 18 1F 50 89 0F 06 2F 31 29 53 00 26 06 7E 0F 0A 32 01 1F 31 1A 0E 07 0F 5F 00 19 17 33 5F 00 08 7F 0F 2F 31 29 49 1B 01 0F 7D 0F 10 0E 69 01 0F 02 17 11 0F 42 1B 40 0F 20 10 06 0F 3B 1B 52 0F 7E 00 07 0F 34 1B 12 08 0E 00 2F 2B 20 CE 16 1D 0F 52 00 0F 2D 28 2D EE 03 0F 94 16 41 0F 8C 10 00 14 7A 9E 16 1F 33 9E 16 03 1F 7A 3A 00 02 1F 31 C6 10 1C 00 DB 33 1E 02 C4 10 0F 0C 22 1A 0F DC 08 FF FF FF FF FF FF FF FF A9 0F 14 19 05 1F 51 14 19 FF 25 4F 58 52 61 79 11 19 E6 07 FD 00 0F 0E 19 04 0F 10 19 22 2F 4D 04 8C 02 FF 46 0E 0D 19 0F 84 0A 06 0F 0D 19 FF DB 1F 31 0D 19 9E 0F 88 04 20 50 00 00 00 00 00 00 01 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 01 00 00 00";
+
+// ---------- Byte utilities ----------
+function hexTextToBytes(text){
+  const parts = text.trim().split(/\s+/).filter(Boolean);
+  if(parts.length === 0) throw new Error('Dữ liệu hex rỗng.');
+  const bytes = new Uint8Array(parts.length);
+  for(let i=0;i<parts.length;i++){
+    if(!/^[0-9a-fA-F]{1,2}$/.test(parts[i])) throw new Error('Token không hợp lệ: "'+parts[i]+'"');
+    bytes[i] = parseInt(parts[i],16);
+  }
+  return bytes;
+}
+
+function bytesToHexText(bytes){
+  const out = new Array(bytes.length);
+  for(let i=0;i<bytes.length;i++){
+    out[i] = bytes[i].toString(16).toUpperCase().padStart(2,'0');
+  }
+  return out.join(' ');
+}
+
+function findBytes(hay, needle, from){
+  outer:
+  for(let i=from; i<=hay.length-needle.length; i++){
+    for(let j=0;j<needle.length;j++){
+      if(hay[i+j] !== needle[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
+
+function strToBytes(s){
+  const b = new Uint8Array(s.length);
+  for(let i=0;i<s.length;i++) b[i] = s.charCodeAt(i);
+  return b;
+}
+
+const DELIM = new Uint8Array([0,0,0,0,1,0,0,0]);
+
+// Locate the 16-byte RGBA float32 block that belongs to a shader property,
+// anchored by its human-readable display name (e.g. "X-Ray Color").
+function findColorOffset(bytes, displayName){
+  const nameBytes = strToBytes(displayName);
+  const nameIdx = findBytes(bytes, nameBytes, 0);
+  if(nameIdx === -1) return null;
+  const afterName = nameIdx + nameBytes.length;
+  const delimIdx = findBytes(bytes, DELIM, afterName);
+  if(delimIdx === -1) return null;
+  const rgbaStart = delimIdx - 16;
+  if(rgbaStart < afterName) return null;
+  return rgbaStart;
+}
+
+// Locate a scalar float property (e.g. Outline Width).
+function findScalarFloatOffset(bytes, displayName){
+  const nameBytes = strToBytes(displayName);
+  const nameIdx = findBytes(bytes, nameBytes, 0);
+  if(nameIdx === -1) return null;
+  const afterName = nameIdx + nameBytes.length;
+  const delimIdx = findBytes(bytes, DELIM, afterName);
+  if(delimIdx === -1) return null;
+  for(let off = afterName; off <= delimIdx - 4; off++){
+    const v = bytesToFloat(bytes, off);
+    if(v === v && v > 0.001 && v < 100000){ // v===v filters NaN
+      return off;
+    }
+  }
+  return null;
+}
+
+function floatToLEBytes(f){
+  const buf = new ArrayBuffer(4);
+  new Float32Array(buf)[0] = f;
+  return new Uint8Array(buf);
+}
+
+function bytesToFloat(bytes, offset){
+  const buf = new ArrayBuffer(4);
+  const view = new Uint8Array(buf);
+  for(let i=0;i<4;i++) view[i] = bytes[offset+i];
+  return new Float32Array(buf)[0];
+}
+
+function writeRGBA(bytes, offset, r,g,b,a){
+  const vals = [r,g,b,a];
+  for(let k=0;k<4;k++){
+    const fb = floatToLEBytes(vals[k]);
+    for(let i=0;i<4;i++) bytes[offset + k*4 + i] = fb[i];
+  }
+}
+
+function writeScalarFloat(bytes, offset, value){
+  const fb = floatToLEBytes(value);
+  for(let i=0;i<4;i++) bytes[offset+i] = fb[i];
+}
+
+function hexToRgb01(hex){
+  const h = hex.replace('#','');
+  const r = parseInt(h.substring(0,2),16)/255;
+  const g = parseInt(h.substring(2,4),16)/255;
+  const b = parseInt(h.substring(4,6),16)/255;
+  return [r,g,b];
+}
+
+function rgb01ToHex(r,g,b){
+  const c = v => Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,'0');
+  return '#' + c(r) + c(g) + c(b);
+}
+
+function isValidHexColor(s){
+  return /^#[0-9a-fA-F]{6}$/.test(s);
+}
+
+// ---------- Property configuration ----------
+const PROPS = [
+  { key:'xray',    kind:'color',  display:'X-Ray Color',   prop:'_XRayColor',    hint:'mặc định RGBA (0, 0, 0, 1)' },
+  { key:'outline', kind:'color',  display:'Outline Color', prop:'_OutLineColor', hint:'mặc định RGBA (0, 0, 0, 1)' },
+  { key:'width',   kind:'scalar', display:'Outline Width', prop:'_OutLineWidth', hint:'mặc định 7.0', min:0, max:30, step:0.1 }
+];
+
+let baseBytes = null;
+let baseLabel = 'mặc định';
+let lastExportedHex = '';
+const state = {};
+
+function loadDefaultBase(){
+  baseBytes = hexTextToBytes(ORIGINAL_HEX);
+  baseLabel = 'mặc định';
+}
+
+function setStatus(msg, isErr){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = isErr ? 'err' : '';
+}
+
+function refreshSourceLabel(){
+  document.getElementById('source-label').textContent =
+    'Đang dùng: ' + baseLabel + ' (' + baseBytes.length.toLocaleString('vi-VN') + ' byte)';
+}
+
+// ---------- Card rendering ----------
+function cardTemplate(p){
+  if(p.kind === 'color'){
+    return (
+      '<section class="card" id="card-'+p.key+'">' +
+        '<h2>'+p.display+'</h2>' +
+        '<p class="sub">Thuộc tính <code>'+p.prop+'</code> — '+p.hint+'</p>' +
+        '<div class="prop-row">' +
+          '<div class="swatch"><div class="fill" id="fill-'+p.key+'"></div></div>' +
+          '<div class="controls">' +
+            '<div class="field">' +
+              '<label for="pick-'+p.key+'">Màu</label>' +
+              '<input type="color" id="pick-'+p.key+'" value="#000000">' +
+              '<input type="text" class="hexcode" id="hex-'+p.key+'" value="#000000" maxlength="7" spellcheck="false" aria-label="Mã hex màu '+p.display+'">' +
+            '</div>' +
+            '<div class="field">' +
+              '<label for="alpha-'+p.key+'">Alpha</label>' +
+              '<input type="range" id="alpha-'+p.key+'" min="0" max="255" value="255">' +
+              '<span class="val" id="alphaval-'+p.key+'">255</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<p class="notice" id="notice-'+p.key+'" hidden></p>' +
+      '</section>'
+    );
+  }
+  return (
+    '<section class="card" id="card-'+p.key+'">' +
+      '<h2>'+p.display+'</h2>' +
+      '<p class="sub">Thuộc tính <code>'+p.prop+'</code> — '+p.hint+'</p>' +
+      '<div class="prop-row">' +
+        '<div class="controls" style="min-width:100%;">' +
+          '<div class="field">' +
+            '<label for="slider-'+p.key+'">Độ dày</label>' +
+            '<input type="range" id="slider-'+p.key+'" min="'+p.min+'" max="'+p.max+'" step="'+p.step+'" value="'+p.min+'">' +
+            '<input type="number" id="number-'+p.key+'" min="0" max="1000" step="'+p.step+'" value="'+p.min+'" class="hexcode" style="width:78px;" aria-label="Giá trị '+p.display+'">' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<p class="notice" id="notice-'+p.key+'" hidden></p>' +
+    '</section>'
+  );
+}
+
+function renderCards(){
+  document.getElementById('props-grid').innerHTML = PROPS.map(cardTemplate).join('');
+}
+
+// ---------- Init / diff / swatch ----------
+function updateSwatch(key){
+  const hexInput = document.getElementById('hex-'+key);
+  const alpha = document.getElementById('alpha-'+key);
+  const fill = document.getElementById('fill-'+key);
+  if(!isValidHexColor(hexInput.value)) return;
+  const [r,g,b] = hexToRgb01(hexInput.value);
+  fill.style.background = 'rgba('+Math.round(r*255)+', '+Math.round(g*255)+', '+Math.round(b*255)+', '+(alpha.value/255)+')';
+}
+
+function updateDiff(){
+  const list = document.getElementById('diff-list');
+  const items = [];
+  PROPS.forEach(p=>{
+    const s = state[p.key];
+    if(!s || s.offset == null || !s.original) return;
+    if(p.kind === 'color'){
+      const hex = document.getElementById('hex-'+p.key).value;
+      const alpha = parseInt(document.getElementById('alpha-'+p.key).value, 10);
+      if(!isValidHexColor(hex)) return;
+      const changed = hex.toLowerCase() !== s.original.hex.toLowerCase() || alpha !== s.original.alpha;
+      if(changed){
+        items.push(
+          '<li><span class="dot" style="background:'+hex+'"></span>' +
+          '<span><strong>'+p.display+'</strong>: '+s.original.hex.toUpperCase()+' (alpha '+s.original.alpha+') → '+hex.toUpperCase()+' (alpha '+alpha+')</span></li>'
+        );
+      }
+    } else {
+      const v = parseFloat(document.getElementById('number-'+p.key).value);
+      if(Number.isNaN(v)) return;
+      const changed = Math.abs(v - s.original.value) > 0.0005;
+      if(changed){
+        items.push(
+          '<li><span class="dot" style="background:var(--accent2)"></span>' +
+          '<span><strong>'+p.display+'</strong>: '+s.original.value.toFixed(2)+' → '+v.toFixed(2)+'</span></li>'
+        );
+      }
+    }
+  });
+  list.innerHTML = items.length ? items.join('') : '<li class="muted">Chưa có thay đổi nào.</li>';
+}
+
+function initProperty(p){
+  const card = document.getElementById('card-'+p.key);
+  const notice = document.getElementById('notice-'+p.key);
+
+  if(p.kind === 'color'){
+    const off = findColorOffset(baseBytes, p.display);
+    state[p.key] = { offset: off, kind: 'color' };
+    if(off == null){
+      card.classList.add('disabled');
+      notice.hidden = false;
+      notice.textContent = 'Không tìm thấy thuộc tính này trong dữ liệu hiện tại — không thể chỉnh.';
+      return;
+    }
+    card.classList.remove('disabled');
+    notice.hidden = true;
+    const r = bytesToFloat(baseBytes, off);
+    const g = bytesToFloat(baseBytes, off+4);
+    const b = bytesToFloat(baseBytes, off+8);
+    const a = bytesToFloat(baseBytes, off+12);
+    const hex = rgb01ToHex(r,g,b);
+    const alpha = Math.round(Math.max(0,Math.min(1,a))*255);
+    state[p.key].original = { hex, alpha };
+    document.getElementById('pick-'+p.key).value = hex;
+    document.getElementById('hex-'+p.key).value = hex;
+    document.getElementById('alpha-'+p.key).value = alpha;
+    document.getElementById('alphaval-'+p.key).textContent = alpha;
+    updateSwatch(p.key);
+  } else {
+    const off = findScalarFloatOffset(baseBytes, p.display);
+    state[p.key] = { offset: off, kind: 'scalar' };
+    if(off == null){
+      card.classList.add('disabled');
+      notice.hidden = false;
+      notice.textContent = 'Không tìm thấy thuộc tính này trong dữ liệu hiện tại — không thể chỉnh.';
+      return;
+    }
+    card.classList.remove('disabled');
+    notice.hidden = true;
+    const v = bytesToFloat(baseBytes, off);
+    state[p.key].original = { value: v };
+    document.getElementById('slider-'+p.key).value = v;
+    document.getElementById('number-'+p.key).value = v;
+  }
+}
+
+function initAll(){
+  PROPS.forEach(initProperty);
+  lastExportedHex = '';
+  document.getElementById('preview').value = '';
+  updateDiff();
+}
+
+// ---------- Event wiring (attached once, after cards are rendered) ----------
+function wireProperty(p){
+  if(p.kind === 'color'){
+    const pick = document.getElementById('pick-'+p.key);
+    const hexInput = document.getElementById('hex-'+p.key);
+    const alpha = document.getElementById('alpha-'+p.key);
+    pick.addEventListener('input', ()=>{
+      hexInput.value = pick.value;
+      updateSwatch(p.key);
+      updateDiff();
+    });
+    hexInput.addEventListener('input', ()=>{
+      let v = hexInput.value.trim();
+      if(v && v[0] !== '#') v = '#'+v;
+      if(isValidHexColor(v)){
+        pick.value = v;
+        updateSwatch(p.key);
+        updateDiff();
+      }
+    });
+    hexInput.addEventListener('blur', ()=>{
+      if(!isValidHexColor(hexInput.value)) hexInput.value = pick.value;
+    });
+    alpha.addEventListener('input', ()=>{
+      document.getElementById('alphaval-'+p.key).textContent = alpha.value;
+      updateSwatch(p.key);
+      updateDiff();
+    });
+  } else {
+    const slider = document.getElementById('slider-'+p.key);
+    const number = document.getElementById('number-'+p.key);
+    slider.addEventListener('input', ()=>{ number.value = slider.value; updateDiff(); });
+    number.addEventListener('input', ()=>{ slider.value = number.value; updateDiff(); });
+  }
+}
+
+// ---------- Source data (default or imported file) ----------
+document.getElementById('file-input').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  if(file.size > 8*1024*1024){
+    setStatus('File quá lớn (giới hạn 8MB cho định dạng hex text).', true);
+    e.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const bytes = hexTextToBytes(reader.result);
+      if(bytes.length < 16) throw new Error('Dữ liệu quá ngắn để là một material hợp lệ.');
+      baseBytes = bytes;
+      baseLabel = file.name;
+      refreshSourceLabel();
+      initAll();
+      setStatus('Đã nạp file "'+file.name+'" làm dữ liệu gốc.', false);
+    }catch(err){
+      setStatus('Lỗi khi đọc file: '+err.message, true);
+    }
+    e.target.value = '';
+  };
+  reader.onerror = ()=>{
+    setStatus('Không thể đọc file đã chọn.', true);
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('btn-use-default').addEventListener('click', ()=>{
+  loadDefaultBase();
+  refreshSourceLabel();
+  initAll();
+  setStatus('Đã quay lại dữ liệu mặc định.', false);
+});
+
+document.getElementById('btn-reset').addEventListener('click', ()=>{
+  initAll();
+  setStatus('Đã đặt lại về giá trị gốc.', false);
+});
+
+function buildEditedBytes(){
+  const bytes = baseBytes.slice();
+  PROPS.forEach(p=>{
+    const s = state[p.key];
+    if(!s || s.offset == null) throw new Error('Thiếu thuộc tính "'+p.display+'" trong dữ liệu hiện tại — không thể xuất file.');
+    if(p.kind === 'color'){
+      const hex = document.getElementById('hex-'+p.key).value;
+      if(!isValidHexColor(hex)) throw new Error('Mã màu không hợp lệ cho "'+p.display+'".');
+      const alpha = parseInt(document.getElementById('alpha-'+p.key).value, 10)/255;
+      const [r,g,b] = hexToRgb01(hex);
+      writeRGBA(bytes, s.offset, r, g, b, alpha);
+    } else {
+      const v = parseFloat(document.getElementById('number-'+p.key).value);
+      if(Number.isNaN(v)) throw new Error('Giá trị "'+p.display+'" không hợp lệ.');
+      writeScalarFloat(bytes, s.offset, v);
+    }
+  });
+  return bytes;
+}
+
+document.getElementById('btn-export').addEventListener('click', ()=>{
+  try{
+    const bytes = buildEditedBytes();
+    const newHexText = bytesToHexText(bytes);
+    document.getElementById('preview').value = newHexText;
+    lastExportedHex = newHexText;
+
+    const blob = new Blob([newHexText], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'material_color_edited.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setStatus('Đã xuất file material_color_edited.txt thành công.', false);
+  }catch(err){
+    setStatus('Lỗi: ' + err.message, true);
+  }
+});
+
+document.getElementById('btn-copy').addEventListener('click', async ()=>{
+  try{
+    const bytes = buildEditedBytes();
+    const text = bytesToHexText(bytes);
+    document.getElementById('preview').value = text;
+    lastExportedHex = text;
+    await navigator.clipboard.writeText(text);
+    setStatus('Đã sao chép hex code vào bộ nhớ tạm.', false);
+  }catch(err){
+    setStatus('Không thể sao chép: ' + err.message, true);
+  }
+});
+
+// ---------- Boot ----------
+try{
+  renderCards();
+  PROPS.forEach(wireProperty);
+  loadDefaultBase();
+  refreshSourceLabel();
+  initAll();
+}catch(err){
+  setStatus('Lỗi khởi tạo: ' + err.message, true);
+}
+</script>
+</body>
+</html>
